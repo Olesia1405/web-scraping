@@ -11,35 +11,36 @@ URL = 'https://habr.com/ru/articles/'
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
 
-# Отправляем HTTP-запрос и получаем HTML-код страницы
-response = requests.get(URL, headers=HEADERS)
-soup = BeautifulSoup(response.text, 'html.parser')
+def fetch_articles(url, headers):
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.text
+    except requests.RequestException as e:
+        print(f"Ошибка при запросе: {e}")
+        return None
 
-# Находим все статьи на странице
-articles = soup.find_all('article', class_='post post_preview')
+def parse_articles(html, keywords):
+    soup = BeautifulSoup(html, 'html.parser')
+    articles = soup.find_all('article')
+    suitable_articles = []
 
-# Список подходящих статей
-suitable_articles = []
+    for article in articles:
+        preview = article.find('div', class_='article-formatted-body')
+        if preview and any(keyword in preview.get_text().lower() for keyword in keywords):
+            date = article.find('time')['datetime'].split('T')[0]
+            title = article.find('a', class_='tm-article-snippet__title-link').text.strip()
+            link = article.find('a', class_='tm-article-snippet__title-link')['href']
+            suitable_articles.append((date, title, f'https://habr.com{link}'))
+    
+    return suitable_articles
 
-# Перебираем все статьи
-for article in articles:
-    # Находим preview-информацию статьи
-    preview = article.find('div', class_='post__text post__text-html js-mediator-article')
+def main():
+    html = fetch_articles(URL, HEADERS)
+    if html:
+        articles = parse_articles(html, KEYWORDS)
+        for date, title, link in articles:
+            print(f'{date} – {title} – {link}')
 
-    # Если preview найден, проверяем на наличие ключевых слов
-    if preview:
-        text = preview.get_text().lower()
-        for keyword in KEYWORDS:
-            if keyword.lower() in text:
-                # Находим дату, заголовок и ссылку статьи
-                date = article.find('span', class_='post__time').text.strip()
-                title = article.find('a', class_='post__title_link').text.strip()
-                link = article.find('a', class_='post__title_link')['href']
-
-                # Добавляем статью в список подходящих статей
-                suitable_articles.append((date, title, link))
-                break
-
-# Выводим список подходящих статей
-for date, title, link in suitable_articles:
-    print(f'{date} – {title} – https://habr.com{link}')
+if __name__ == '__main__':
+    main()
